@@ -37,7 +37,8 @@ object State {
         lazy val s: State = generate(e, new Split(s, out))
         return s
       }
-      case Literal(c) => new Character((d: Char) => c == d, out)
+      case Literal('.') => new Character(_ => true, out)
+      case Literal(c)   => new Character((d: Char) => c == d, out)
     }
   }
 }
@@ -98,11 +99,11 @@ object Regexp {
     * | e?  | eが0回か1回 |
     * | (e) | eをグループ化 |
     *
-    * 文字セット(.や[charset]、\d)などはない。 ^(先頭マッチ), $(末尾マッチ)などもない。
+    * 文字セットは.（任意の文字）のみ。 ^(先頭マッチ), $(末尾マッチ)などはない。
     * @param pattern
     * @return
     */
   def compile(pattern: String): Regexp = {
-    new Regexp(State.ASTtoNFA(AST.parse(pattern)))
+    new Regexp(State.ASTtoNFA(AST.parse(".*" + pattern + ".*")))
   }
 }
