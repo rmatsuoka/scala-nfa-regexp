@@ -15,6 +15,8 @@ res2: Boolean = true
 
 ## rule
 
+| expr | description |
+| -- | -- |
 | . | matches any char |
 | e+  | matches 0 or more times |
 | e*  | matches 1 or more times |
