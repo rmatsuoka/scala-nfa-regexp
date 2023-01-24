@@ -1,6 +1,7 @@
 package com.example.regexp
 
 import scala.util.parsing.combinator._
+import scala.util.parsing.input.CharSequenceReader
 
 abstract class AST
 case class Literal(c: Char) extends AST
@@ -26,39 +27,49 @@ object AST {
     l.head
   }
 
-  def parse(pattern: String): AST = InfixParser.mustParse(pattern)
+  val parse = InfixParser.parse _
 }
 
-private object InfixParser extends RegexParsers {
+private object InfixParser extends Parsers {
+  type Elem = Char;
+
+  implicit def char(c: Char): Parser[Char] = new Parser[Char] {
+    def apply(in: Input) = {
+      val found = in.first
+      if (c == found)
+        Success(c, in.rest)
+      else
+        Failure("'"+c+"' expected but "+found+" found", in.rest)
+    }
+  }
+
+  // このBNFは https://9p.io/magic/man2html/6/regexp を参考に実装した。
+
   def e0: Parser[AST] = (
-    e1 ~ "|" ~ e0 ^^ { case e1 ~ _ ~ e0 => Alternation(e0, e1) }
+    e1 ~ '|' ~ e0 ^^ { case e1 ~ _ ~ e0 => Alternation(e1, e0) }
       | e1
   )
   def e1: Parser[AST] = (
     e2 ~ e1 ^^ { case e2 ~ e1 => Catenation(e2, e1) }
       | e2
   )
-  def REP: Parser[String] = "*" | "+" | "?"
+  def REP: Parser[Char] = char('*') | '+' | '?'
   def e2: Parser[AST] = (
     e3 ~ REP ^^ {
-      case e3 ~ "*" => Star(e3)
-      case e3 ~ "+" => Plus(e3)
-      case e3 ~ "?" => Question(e3)
+      case e3 ~ '*' => Star(e3)
+      case e3 ~ '+' => Plus(e3)
+      case e3 ~ '?' => Question(e3)
       case _        => throw new Exception("must not reach here")
     }
       | e3
   )
   def e3: Parser[AST] = (
     literal ^^ { case c => Literal(c) }
-      | "(" ~ e0 ~ ")" ^^ { case _ ~ e0 ~ _ => e0 }
+      | '(' ~ e0 ~ ')' ^^ { case _ ~ e0 ~ _ => e0 }
   )
-  def literal: Parser[Char] = """[A-Za-z0-9]""".r ^^ (_.charAt(0))
+  def literal: Parser[Char] = elem("literal", (!Set('+', '*', '?', '|', '(', ')').contains(_)))
 
-  def mustParse(pattern: String): AST = {
-    parse(e0, pattern) match {
-      case Success(result, _) => result
-      case Error(msg, next)   => throw new Exception(msg)
-      case Failure(msg, next) => throw new Exception(msg)
-    }
+  def parse(pattern: String): AST = {
+    phrase(e0)(new CharSequenceReader(pattern)).get
   }
 }
