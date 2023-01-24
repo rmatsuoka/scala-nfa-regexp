@@ -23,6 +23,14 @@ object State {
       case Catenation(e1, e2) => generate(e1, generate(e2, out))
       case Question(e)        => new Split(generate(e, out), out)
       case Star(e) => {
+        /* 
+        * Split(out1, out2)の引数は名前渡しであり、かつout1, out2は遅延評価である。したがってgenerate(e,s)はs.out1が初めて呼び出されたときの一回しか評価されない。
+        * つまりgenerate(e,s)はsがコンストラクトされた後に（つまりsが存在してから）評価される。従ってsは問題なく評価できる。
+        * もし、Splitが名前渡しではなかったら、generate(e,s)はただちに評価されることになる。
+        * するとs、すなわちnew Split(generate(e,s), out)はただちに評価される。これはgenerate(e,s)の評価する無限ループに陥る。
+        * 要するに先にsを作って、その後にgenerate(e,s)を評価すれば良いということである。
+        * ちなみにgenerate(e,s)の引数sを名前渡しにする代わりにSplitの引数を値渡しにするのは、sがいつ評価されるのかわからなくなるので悪い方法だ。
+        */
         lazy val s: State = new Split(generate(e, s), out)
         return s
       }
