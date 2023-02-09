@@ -1,28 +1,29 @@
 package com.example.regexp
 
-abstract class State
-class Character(val accept: Char => Boolean, _out: => State) extends State {
-  lazy val out = _out
-}
-class Split(_out1: => State, _out2: => State) extends State {
-  lazy val out1 = _out1
-  lazy val out2 = _out2
-}
-class Match extends State
+private[regexp] object NFA {
 
-object State {
+  abstract class State
+  class Character(val accept: Char => Boolean, _out: => State) extends State {
+    lazy val out = _out
+  }
+  class Split(_out1: => State, _out2: => State) extends State {
+    lazy val out1 = _out1
+    lazy val out2 = _out2
+  }
+  class Match extends State
+
   val `match` = new Match()
-  def ASTtoNFA(e: AST): State = {
+  def ASTtoNFA(e: AST.Node): State = {
     generate(e, `match`)
   }
 
-  private def generate(e: AST, out: State): State = {
+  private def generate(e: AST.Node, out: State): State = {
     e match {
-      case Alternation(e1, e2) =>
+      case AST.Alternation(e1, e2) =>
         new Split(generate(e1, out), generate(e2, out))
-      case Catenation(e1, e2) => generate(e1, generate(e2, out))
-      case Question(e)        => new Split(generate(e, out), out)
-      case Star(e) => {
+      case AST.Catenation(e1, e2) => generate(e1, generate(e2, out))
+      case AST.Question(e)        => new Split(generate(e, out), out)
+      case AST.Star(e) => {
         /* Split(out1, out2)の引数は名前渡しであり、かつ遅延評価である。したがってgenerate(e,s)はs.out1が初めて呼び出されたときの一回しか評価されない。
          * つまりgenerate(e,s)はsがコンストラクトされた後に（つまりsが存在してから）評価される。従ってsは問題なく評価できる。
          * もし、Splitが名前渡しではなかったら、generate(e,s)はただちに評価されることになる。
@@ -33,23 +34,23 @@ object State {
         lazy val s: State = new Split(generate(e, s), out)
         return s
       }
-      case Plus(e) => {
+      case AST.Plus(e) => {
         lazy val s: State = generate(e, new Split(s, out))
         return s
       }
-      case Literal('.') => new Character(_ => true, out)
-      case Literal(c)   => new Character((d: Char) => c == d, out)
+      case AST.Literal('.') => new Character(_ => true, out)
+      case AST.Literal(c)   => new Character((d: Char) => c == d, out)
     }
   }
 }
 
-class Regexp(state: State) {
+class Regexp(state: NFA.State) {
   def matchString(str: String): Boolean = {
     val finalStates = str.toList.foldLeft(followUnlabeledArrows(state)) {
       (set, c) => step(set, c)
     }
 
-    finalStates contains State.`match`
+    finalStates contains NFA.`match`
   }
 
   /** sから始まり、Splitの空動作を遷移し、到達できるすべてのStateの集合を返す。sがCharacterもしくはMatchならsのみが属する集合を返す。
@@ -57,11 +58,11 @@ class Regexp(state: State) {
     * @return
     *   sから空動作によって到達できるすべてのStateの集合
     */
-  private def followUnlabeledArrows(s: State): Set[State] = {
+  private def followUnlabeledArrows(s: NFA.State): Set[NFA.State] = {
     s match {
-      case s: Character => Set[State](s)
-      case s: Match     => Set[State](s)
-      case s: Split =>
+      case s: NFA.Character => Set[NFA.State](s)
+      case s: NFA.Match     => Set[NFA.State](s)
+      case s: NFA.Split =>
         followUnlabeledArrows(s.out1) ++ followUnlabeledArrows(s.out2)
     }
   }
@@ -74,13 +75,13 @@ class Regexp(state: State) {
     * @return
     *   cが入力されたときの次の状態の集合 (Splitは含まれない)
     */
-  private def step(set: Set[State], c: Char): Set[State] = {
-    set.foldLeft(Set[State]()) { (set, s) =>
+  private def step(set: Set[NFA.State], c: Char): Set[NFA.State] = {
+    set.foldLeft(Set[NFA.State]()) { (set, s) =>
       s match {
-        case s: Character =>
+        case s: NFA.Character =>
           if (s.accept(c)) set ++ followUnlabeledArrows(s.out) else set
-        case _: Match => set
-        case _: Split => throw new Exception("must not reach here")
+        case _: NFA.Match => set
+        case _: NFA.Split => throw new Exception("must not reach here")
       }
     }
   }
@@ -88,22 +89,23 @@ class Regexp(state: State) {
 
 object Regexp {
   def compilePostfix(pattern: String): Regexp = {
-    new Regexp(State.ASTtoNFA(AST.parsePostfix(pattern)))
+    new Regexp(NFA.ASTtoNFA(AST.parsePostfix(pattern)))
   }
 
   /** 正規表現のルール
     *
+    * |-----|------------|
     * | e+  | eを1回以上  |
-    * |:----|:--------|
     * | e*  | eを0回以上  |
     * | e?  | eが0回か1回 |
     * | (e) | eをグループ化 |
+    * | e1 \| e2 | e1またはe2 |
     *
     * 文字セットは.（任意の文字）のみ。 ^(先頭マッチ), $(末尾マッチ)などはない。
     * @param pattern
     * @return
     */
   def compile(pattern: String): Regexp = {
-    new Regexp(State.ASTtoNFA(AST.parse(".*" + pattern + ".*")))
+    new Regexp(NFA.ASTtoNFA(AST.parse(".*" + pattern + ".*")))
   }
 }
