@@ -3,8 +3,9 @@ import org.scalatest.funspec.AnyFunSpec
 import com.example.regexp._
 
 class RegexpSpec extends AnyFunSpec {
-    val re = Regexp.compile("ab*c")
+
     describe("A regexp 'ab*c'") {
+        val re = Regexp.compile("ab*c")
         it("should match following strings") {
             assert(re.matchString("ac"))
             assert(re.matchString("abc"))
@@ -22,6 +23,24 @@ class RegexpSpec extends AnyFunSpec {
             assert(re.matchString("cba") == false)
             assert(re.matchString("addddc") == false)
             assert(re.matchString("XXXXXXXXXabXXXXXXXX") == false)
+        }
+    }
+
+    describe("A regexp '(abc|def)'") {
+        val re = Regexp.compile("(abc|def)+")
+        it("should match following strings") {
+            assert(re.matchString("abc"))
+            assert(re.matchString("def"))
+            assert(re.matchString("abcdef"))
+            assert(re.matchString("defabc"))
+            assert(re.matchString("_______defdefdef____"))
+        }
+
+        it("should not match following strings") {
+            assert(re.matchString("") == false)
+            assert(re.matchString("ab") == false)
+            assert(re.matchString("cde") == false)
+            assert(re.matchString("_____") == false)
         }
     }
 }
